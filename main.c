@@ -52,7 +52,7 @@ typedef struct _property {
     char name[MAX_NAME + 1];
     int price;
     COLOR color;
-    int isOwned;        // -1 if not owned, playerIndex otherwise
+    int ownerIndex;        // -1 if not owned, playerIndex otherwise
     int isMonopoly;     // 1 if is monopoly, 0 otherwise
 } PROPERTY;
 
@@ -87,7 +87,7 @@ int space_count;
 PROPERTY * properties = NULL;
 int properties_count;
 
-PLAYER * players[MAX_PLAYERS] = {};
+PLAYER * players[MAX_PLAYERS] = {}; // TODO: make this a pointer to array of pointers to players
 int player_count, playerIndex;
 
 ENDPOINT game_state;
@@ -208,7 +208,7 @@ void getOptions(int argc, char * argv[], FLAG * flag_board, FLAG * flag_prop){
 }
 
 // initialise players, gameboard, properties and global variables
-int initGame(FLAG flag_b, FLAG flag_t){
+int initGameboard(FLAG flag_b, FLAG flag_t){
     /* Errors:
     return 1 - cannot open the file
     return 2 - not enough properties
@@ -361,14 +361,7 @@ int initGame(FLAG flag_b, FLAG flag_t){
     return 0;
 }
 
-void drawBoard(){
-
-};
-
-void drawResults(){
-
-};
-
+// create players
 void initPlayers(){
 
     for (int playerNumber = 0; playerNumber < player_count; playerNumber++)
@@ -410,9 +403,253 @@ void initPlayers(){
     return;
 }
 
-void moveNextPlayer(){
+void drawBoard(){
 
 };
+
+void drawResults(){
+
+};
+
+void prompt_BoardInfo(){
+    printf("Game board:\n");
+
+    for (int spaceIndex = 0; spaceIndex < space_count; spaceIndex++)
+    {
+
+        if (gameboard[spaceIndex].type != Property){
+            printf("%2d. %s", spaceIndex+1, space_types[gameboard[spaceIndex].type]); //number. name
+        } else {
+            printf("%2d. %-18s", spaceIndex+1, gameboard[spaceIndex].property->name); //number. name
+            printf("%-2d %-9s", gameboard[spaceIndex].property->price, property_colors[gameboard[spaceIndex].property->color]); //price color
+            
+            if (gameboard[spaceIndex].property->ownerIndex != -1){
+                printf("P%d", gameboard[spaceIndex].property->ownerIndex+1);
+
+                if (gameboard[spaceIndex].property->isMonopoly){
+                    printf(" yes");
+                } else {
+                    printf(" no");
+                }
+            }
+        }
+
+        printf("\n");
+    }
+    return;
+}
+
+
+// performs the move operation on player with (playerIndex)
+int moveNextPlayer(int diceValue) {
+
+    // returns 1 if successful move, 0 if player becomes Bankrupt
+
+    PLAYER * currentPlayer = currentPlayer;
+    SPACE * currentSpace = &gameboard[currentPlayer->space_number];
+
+    // JAIL check
+    if (currentPlayer->is_in_jail == 1){
+        if (currentPlayer->cash >= 1) {
+            currentPlayer->cash -= 1;
+        } else {
+            return 0; // isBankrupt
+        }
+        currentPlayer->is_in_jail = 0;
+    }
+    
+    // Change position
+    currentPlayer->space_number += diceValue;
+
+    // Check if player has gone to next lap
+    if (currentPlayer->space_number>=24)
+    {
+        currentPlayer->space_number -= 24;
+        currentPlayer->cash += 2;
+    }
+
+    // Perform the action based on current position on the gameboard
+    switch (currentSpace->type)
+    {
+    case Start:
+        //pass
+        break;
+
+    case Free_parking:
+        //pass
+        break;
+
+    case In_jail:
+        //pass
+        break;
+
+    case Go_to_jail:
+        if (currentPlayer->num_jail_pass > 0){
+            currentPlayer->num_jail_pass -= 1;
+        } else {
+            currentPlayer->space_number = 6; //Jail
+            currentPlayer->is_in_jail = 1;
+        }
+        break;
+
+    case Jail_pass:
+        currentPlayer->num_jail_pass += 1;
+        break;
+
+    case Property:
+
+        PROPERTY * currentProperty = currentSpace->property;
+
+        if (currentProperty->ownerIndex == -1){         // currentProperty is not owned
+
+            // check if currentPlayer is UNABLE to buy this property
+            if (currentPlayer->cash < currentProperty->price){
+                return 0;  // isBankrupt
+            }
+            // buy otherwise
+            currentPlayer->cash -= currentProperty->price;
+
+            currentPlayer->owned_properties[currentPlayer->num_properties] = currentProperty;
+            currentPlayer->num_properties += 1;
+
+            currentProperty->ownerIndex = playerIndex;
+
+            // check if bought property finishes a monopoly -- TODO as function
+
+            // if (gameboard[currentPlayer->space_number + (currentPlayer->space_number+1)%3 - 1].ownerIndex == playerIndex){
+            //     currentProperty->isMonopoly = 1;  // is monopoly now
+            //     gameboard[currentPlayer->space_number + (currentPlayer->space_number+1)%3 - 1].isMonopoly = 1;
+            // }
+            
+            // return 1;
+
+        } else if (currentProperty->ownerIndex != playerIndex) { // currentProperty is owned by another player
+
+            // if currentProperty is Monopoly, currentPlayer should pay twice the price
+
+            if (currentProperty->isMonopoly == 0){  // scenario if currentProperty is NOT Monopoly
+
+                // check if currentPlayer is UNABLE to pay rant this property
+                if (currentPlayer->cash < currentProperty->price){
+                    return 0;  // isBankrupt
+                }
+
+                // pay otherwise
+                currentPlayer->cash -= currentProperty->price;
+                players[currentProperty->ownerIndex]->cash += currentProperty->price;  // transfer money to owner
+                
+                // return 1;
+
+            } else {                                // scenario if currentProperty is NOT Monopoly
+
+                // check if currentPlayer is UNABLE to pay rant this property
+                if (currentPlayer->cash < 2*currentProperty->price) {
+                    return 0;  // isBankrupt
+                }
+
+                // pay otherwise
+                currentPlayer->cash -= 2*currentProperty->price;
+                players[currentProperty->ownerIndex]->cash += 2*currentProperty->price; // transfer money to owner
+
+                // return 1;
+            }
+        }
+        break;
+
+    default:
+        break;
+
+    }
+
+    return 1;
+}
+
+int getDiceValue( int * dice){
+
+    scanf("%d", dice);
+
+    return 0;
+};
+
+int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
+    int max_cash = 0,
+        winner_num = -2; // -2 is "-", -1 is "?"
+
+    //find max cash player
+    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    {
+        if (playerIndex == bankruptPlayerIndex) {
+            continue;
+        }
+        
+        if (players[playerIndex]->cash > max_cash) {
+            max_cash = players[playerIndex]->cash;
+        }
+    }
+
+    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    {
+        if (playerIndex == bankruptPlayerIndex) {
+            continue;
+        }
+        if (players[playerIndex]->cash == max_cash) {
+            if (winner_num == -2)
+            {
+                winner_num = playerIndex;
+            } else {
+                winner_num = -1;
+            }
+        }
+    }
+
+    if (winner_num >= 0){
+        return winner_num;
+    }
+    winner_num = -2;
+    //find max cash player
+    int max_property_price = 0, player_property_price = 0;
+    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    {
+        if (playerIndex == bankruptPlayerIndex || players[playerIndex]->cash != max_cash) {
+            continue;
+        }
+        
+        player_property_price = 0;
+        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++)
+        {
+            player_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
+        }
+
+        if (player_property_price > max_property_price) {
+            max_property_price = player_property_price;
+        }
+        
+    }
+
+    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    {
+        if (playerIndex == bankruptPlayerIndex || players[playerIndex]->cash != max_cash) {
+            continue;
+        }
+
+        player_property_price = 0;
+        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++)
+        {
+            player_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
+        }
+
+        if (player_property_price == max_property_price) {
+            if (winner_num == -2)
+            {
+                winner_num = playerIndex;
+            } else {
+                winner_num = -1;
+            }
+        }
+    }
+
+    return winner_num;
+}
 
 void Game(int argc, char * argv[]){
 
@@ -421,24 +658,34 @@ void Game(int argc, char * argv[]){
     getOptions(argc, argv, &flag_board, &flag_properties); // +FLAGS
 
     game_state = game_start;
+    int dice, bankruptPlayerIndex;
 
     while (1) {
         switch (game_state)
         {
         case game_start:
             initPlayers();
-            initGame(flag_board, flag_properties);
+            initGameboard(flag_board, flag_properties);
 
+            prompt_BoardInfo();
             game_state = eol;
-            drawBoard();
             break;
 
         case game_process:
-            moveNextPlayer();
+
             drawBoard();
+            getDiceValue(&dice); // wait untill input dice/enter
+
+            if(moveNextPlayer(dice) == 0){
+                bankruptPlayerIndex = playerIndex;
+                game_state = game_end;
+            }
+
             break;
 
         case game_end:
+            
+            findWinner(bankruptPlayerIndex);
             drawResults();
             break;
 
