@@ -7,6 +7,7 @@
 #include <ctype.h>
 
 
+// --- Constants definitions ---
 #define DEF_SPACE_COUNT 24
 #define DEF_PROP_COUNT 16
 #define MAX_NAME 100        // max. namelength
@@ -16,11 +17,13 @@
 
 #define SPACE_HEIGHT 8
 #define SPACE_WIDTH 20
-
 // #define randint(a, b) (a + (rand() % (b-a)))
 
+
+// --- Custom values ---
 // Game states
 typedef enum _endpoint {
+    menu,                   // game menu
     game_start,             // game initialisation state
     game_process,           // game process - play
     game_end,               // game end - prompt
@@ -50,7 +53,7 @@ typedef enum _space_type {
 } SPACE_TYPE;
 
 
-
+// --- Structures ---
 // Structure for properties' specs
 typedef struct _property {
     char name[MAX_NAME + 1];
@@ -93,20 +96,22 @@ struct _window_gameboard {
 } window_gameboard;
 
 
-// global variables definitions
+// --- Global variables definitions ---
 SPACE * gameboard = NULL;
-int space_count;
+int space_count;        // gameboard size
 
 PROPERTY * properties = NULL;
 int properties_count;
 
-PLAYER * players[MAX_PLAYERS] = {}; // TODO: make this a pointer to array of pointers to players
-int player_count, playerTurnIndex;
+PLAYER * players[MAX_PLAYERS] = {};
+int players_count, playerTurnIndex, notBotIndex;
 
 ENDPOINT game_state;
 
+int waitTimeJK;
 
-// const values definition
+
+// Definition of strings corresponding to type PROPERTY (types)
 const char *space_types[NUM_SPACE_TYPES] = {
         "PROPERTY",
         "START",
@@ -116,7 +121,7 @@ const char *space_types[NUM_SPACE_TYPES] = {
         "JAIL PASS"
 };
 
-// nazvy farieb nehnutelnosti
+// Definition of strings corresponding to type COLOR
 const char *property_colors[] = {
         "Brown",
         "Skyblue",
@@ -128,6 +133,8 @@ const char *property_colors[] = {
         "Blue"
 };
 
+
+// definition of default gameboard
 PROPERTY def_properties[DEF_PROP_COUNT] = {
         {.name = "FOOD TRUCK", .price = 1, .color = Brown, .ownerIndex = -1, .isMonopoly = 0},
         {.name = "PIZZA RESTAURANT", .price = 1, .color = Brown, .ownerIndex = -1, .isMonopoly = 0},
@@ -147,7 +154,7 @@ PROPERTY def_properties[DEF_PROP_COUNT] = {
         {.name = "AMUSEMENT PARK", .price = 5, .color = Blue, .ownerIndex = -1, .isMonopoly = 0}
 };
 
-// inicializacia hracieho pola
+// definition of default gameboard
 SPACE def_gameboard[DEF_SPACE_COUNT] = {
         {.type = Start, .property = NULL},
         {.type = Property, .property = &def_properties[0]},
@@ -174,6 +181,7 @@ SPACE def_gameboard[DEF_SPACE_COUNT] = {
         {.type = Property, .property =  &def_properties[14]},
         {.type = Property, .property =  &def_properties[15]}
 };
+
 
 // --- temporary Functions --- //
 
@@ -226,11 +234,12 @@ void getOptions(int argc, char * argv[], FLAG * flag_board, FLAG * flag_prop){
 
 // --- Game logic functions --- //
 
+// better random
 int randint(int a, int b){
-    return (int)( a + (time(NULL) % b));
+    return (int)( a + (random() % b));
 }
 
-// initialise players, gameboard, properties and global variables
+// set gameboard and properties (if needed - read from file -- TODO)
 int initGameboard(FLAG flag_b, FLAG flag_t){
     /* Errors:
     return 1 - cannot open the file
@@ -309,7 +318,7 @@ int initGameboard(FLAG flag_b, FLAG flag_t){
     SPACE_TYPE temp_propType;
 
     if (flag_t.isOn){
-        properties = (PROPERTY *) calloc((properties_count), sizeof(PROPERTY));
+        properties = (PROPERTY *) malloc(properties_count*sizeof(PROPERTY));
         
         rewind(file_t);
 
@@ -345,7 +354,7 @@ int initGameboard(FLAG flag_b, FLAG flag_t){
     }
 
     if (flag_b.isOn){
-        gameboard = (SPACE *) calloc(space_count, sizeof(SPACE));//(space_count), sizeof(game_board)/NUM_SPACES);
+        gameboard = (SPACE *) malloc(space_count*sizeof(SPACE));
         
         rewind(file_b);
         fgets(temp_row, MAX_NAME, file_b);
@@ -386,50 +395,52 @@ int initGameboard(FLAG flag_b, FLAG flag_t){
     return 0;
 }
 
-// create players
+// create players and initialize their values
 void initPlayers(){
 
-    for (int playerNumber = 0; playerNumber < player_count; playerNumber++)
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
     {
-        for (int i = 0; i < player_count; i++)
-        {
-            players[i] = calloc(1, sizeof(PLAYER));
+        // create a player
+        players[playerIndex] = calloc(1, sizeof(PLAYER));
 
-            players[i]->index = i;
-            players[i]->space_number = 0;
-            players[i]->isBot = 1;  // TODO
-            players[i]->num_jail_pass = 0;
-            players[i]->is_in_jail = 0;
-            players[i]->num_properties = 0;
-            players[i]->owned_properties = (PROPERTY **) calloc(properties_count, sizeof(PROPERTY *));
-
-            switch (player_count)
-            {
-            case 2:
-                players[i]->cash = 20;
-                break;
-            
-            case 3:
-                players[i]->cash = 18;
-                break;
-            
-            case 4:
-                players[i]->cash = 16;
-                break;
-            
-            default:
-                break;
-            }
+        // initialize player values
+        players[playerIndex]->index = playerIndex;
+        players[playerIndex]->space_number = 0;
+        players[playerIndex]->num_jail_pass = 0;
+        players[playerIndex]->is_in_jail = 0;
+        players[playerIndex]->num_properties = 0;
+        players[playerIndex]->owned_properties = (PROPERTY **) calloc(properties_count, sizeof(PROPERTY *));
+        if (playerIndex == notBotIndex){
+            players[playerIndex]->isBot = 0;
+        } else {
+            players[playerIndex]->isBot = 1; 
         }
+
+        // set money count depending on players_count
+        switch (players_count)
+        {
+        case 2:
+            players[playerIndex]->cash = 20;
+            break;
         
+        case 3:
+            players[playerIndex]->cash = 18;
+            break;
         
+        case 4:
+            players[playerIndex]->cash = 16;
+            break;
+        
+        default:
+            break;
+        }
     }
-    
+
     return;
 }
 
 
-void updateMonopolyState(const COLOR color) {  // TODO: FIX
+void updateMonopolyState(const COLOR color) {
 
     int color_ownerIndex;
     int propertyIndex = 0;
@@ -443,11 +454,12 @@ void updateMonopolyState(const COLOR color) {  // TODO: FIX
 
     for (; propertyIndex < properties_count; propertyIndex++) {     // check if first owner is the same for each property with this color
         if ((properties[propertyIndex].color == color) && (properties[propertyIndex].ownerIndex != color_ownerIndex)){
-            return;         // exit if any property has other owner or isn't owned
+            return;
+            // exit if any property has another owner or isn't owned
         }
     }
     
-    // set everything this color to Monopoly
+    // else: set everything this color to Monopoly
     for (propertyIndex = 0; propertyIndex < properties_count; propertyIndex++){
         if (properties[propertyIndex].color == color){
             properties[propertyIndex].isMonopoly = 1;
@@ -500,10 +512,10 @@ int movePlayer(int diceValue) {
         break;
 
     case Go_to_jail:
-        if (currentPlayer->num_jail_pass > 0){
+        if (currentPlayer->num_jail_pass > 0){  //skip jail
             currentPlayer->num_jail_pass -= 1;
         } else {
-            currentPlayer->space_number = 6; //Jail
+            currentPlayer->space_number = 6;    //go to jail due to no jailPasses
             currentPlayer->is_in_jail = 1;
         }
         break;
@@ -546,12 +558,10 @@ int movePlayer(int diceValue) {
                 // pay otherwise
                 currentPlayer->cash -= currentProperty->price;
                 players[currentProperty->ownerIndex]->cash += currentProperty->price;  // transfer money to owner
-                
-                // return 1;
 
             } else {                                // scenario if currentProperty is NOT Monopoly
 
-                // check if currentPlayer is UNABLE to pay rant this property
+                // check if currentPlayer is UNABLE to pay rent this property
                 if (currentPlayer->cash < 2*currentProperty->price) {
                     return 0;  // isBankrupt
                 }
@@ -559,8 +569,6 @@ int movePlayer(int diceValue) {
                 // pay otherwise
                 currentPlayer->cash -= 2*currentProperty->price;
                 players[currentProperty->ownerIndex]->cash += 2*currentProperty->price; // transfer money to owner
-
-                // return 1;
             }
         }
         break;
@@ -570,18 +578,22 @@ int movePlayer(int diceValue) {
 
     }
 
-    return 1;
+    return 1;   //success
 }
+
 
 int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
     int max_cash = 0,
-        winner_num = -2; // -2 is "-", -1 is "?"
+        winner_num = -2;
+        // -2 for unitialized (within the function),
+        // -1 is Unable to find winner,
+        // Index of winner otherwise
 
     //find max cash player
-    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
     {
         if (playerIndex == bankruptPlayerIndex) {
-            continue;
+            continue;   // skip bankrupt player
         }
         
         if (players[playerIndex]->cash > max_cash) {
@@ -589,7 +601,8 @@ int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
         }
     }
 
-    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    // find players that have the same cash as max_cash
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
     {
         if (playerIndex == bankruptPlayerIndex) {
             continue;
@@ -598,7 +611,7 @@ int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
             if (winner_num == -2)
             {
                 winner_num = playerIndex;
-            } else {
+            } else {    //there is more than 1 player with the same cash as max_cash
                 winner_num = -1;
             }
         }
@@ -608,43 +621,45 @@ int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
         return winner_num;
     }
     winner_num = -2;
+
     //find max cash player
-    int max_property_price = 0, player_property_price = 0;
-    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    int max_property_price = 0, currentPlayer_property_price = 0;
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
     {
         if (playerIndex == bankruptPlayerIndex || players[playerIndex]->cash != max_cash) {
-            continue;
-        }
-        
-        player_property_price = 0;
-        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++)
-        {
-            player_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
+            continue;   // skip bankrupt player
         }
 
-        if (player_property_price > max_property_price) {
-            max_property_price = player_property_price;
+        // get this plater's properties price
+        currentPlayer_property_price = 0;
+        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++) {
+            currentPlayer_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
+        }
+
+        if (currentPlayer_property_price > max_property_price) {
+            max_property_price = currentPlayer_property_price;
         }
         
     }
 
-    for (int playerIndex = 0; playerIndex < player_count; playerIndex++)
+    // find players that have the same sum of props as max_property_price
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
     {
         if (playerIndex == bankruptPlayerIndex || players[playerIndex]->cash != max_cash) {
             continue;
         }
 
-        player_property_price = 0;
-        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++)
-        {
-            player_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
+        // get this plater's properties price
+        currentPlayer_property_price = 0;
+        for (int propertyIndex = 0; propertyIndex < players[playerIndex]->num_properties; propertyIndex++) {
+            currentPlayer_property_price += players[playerIndex]->owned_properties[propertyIndex]->price;
         }
 
-        if (player_property_price == max_property_price) {
+        if (currentPlayer_property_price == max_property_price) {
             if (winner_num == -2)
             {
                 winner_num = playerIndex;
-            } else {
+            } else {    //there is more than 1 winner
                 winner_num = -1;
             }
         }
@@ -653,10 +668,13 @@ int findWinner(int bankruptPlayerIndex){  // returns index of winner in players
     return winner_num;
 }
 
-void freeGame(){
+
+// frees all allocated memory
+void freeDrawData(){
+    // free window (ncurses) structures
     delwin(window_gameboard.frame);
     delwin(window_gameboard.interraction);
-    for(int playerIndex = 0; playerIndex <  player_count; playerIndex++){
+    for(int playerIndex = 0; playerIndex <  players_count; playerIndex++){
         delwin(window_gameboard.playerStates[playerIndex]);
     }
     for (int spaceIndex = 0; spaceIndex < space_count; spaceIndex++){
@@ -672,45 +690,41 @@ void freeGame(){
 }
 
 
+// free custom gameboard data (which was read from files (not released by now))
+void freeGameboard(FLAG flag_b, FLAG flag_p){
+    if (flag_b.isOn){
+        free(gameboard);
+    }
+
+    if (flag_p.isOn){
+        free(properties);
+    }
+}
+
+
+// free memory, allocated for players
+void freePlayers(){
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++)
+    {
+        free(players[playerIndex]);
+    }
+}
+
 
 // --- Interface functions --- 
 
-void drawTextMonopoly(WINDOW * window, int y, int x, int isHorizontal){
-    if (isHorizontal){
-        mvwprintw(window, y, x,    "  MMM   MMM   OOO   N   N   OOO   PPPP    OOO   L     YY   YY");
-        mvwprintw(window, y+1, x,  "  MMMM MMMM  O   O  NN  N  O   O  P   P  O   O  L      YY YY ");
-        mvwprintw(window, y+2, x,  "  MM MMM MM O     O N N N O     O PPPP  O     O L       YYY  ");
-        mvwprintw(window, y+3, x,  "  MM  M  MM O     O N  NN O     O P     O     O L        Y   ");
-        mvwprintw(window, y+4, x,  "  MM     MM  O   O  N   N  O   O  P      O   O  L        Y   ");
-        mvwprintw(window, y+5, x,  "  MM     MM   OOO   N   N   OOO   P       OOO   LLLLL    Y   ");
-    } else {
-        mvwprintw(window, y, x,      "  MMM   MMM      PPPP    ");
-        mvwprintw(window, y+1, x,    "  MMMM MMMM      P   P   ");
-        mvwprintw(window, y+2, x,    "  MM MMM MM      PPPP    ");
-        mvwprintw(window, y+3, x,    "  MM  M  MM      P       ");
-        mvwprintw(window, y+4, x,    "  MM     MM      P       ");
-        mvwprintw(window, y+5, x,    "  MM     MM      P       ");
-        mvwprintw(window, y+6, x,    "     OOO         OOO    ");
-        mvwprintw(window, y+6+1, x,  "    O   O       O   O   ");
-        mvwprintw(window, y+6+2, x,  "   O     O     O     O  ");
-        mvwprintw(window, y+6+3, x,  "   O     O     O     O  ");
-        mvwprintw(window, y+6+4, x,  "    O   O       O   O   ");
-        mvwprintw(window, y+6+5, x,  "     OOO         OOO    ");
-        mvwprintw(window, y+12, x,   "   N   N        L      ");
-        mvwprintw(window, y+12+1, x, "   NN  N        L      ");
-        mvwprintw(window, y+12+2, x, "   N N N        L      ");
-        mvwprintw(window, y+12+3, x, "   N  NN        L      ");
-        mvwprintw(window, y+12+4, x, "   N   N        L      ");
-        mvwprintw(window, y+12+5, x, "   N   N        LLLLL  ");
-        mvwprintw(window, y+18, x,   "     OOO       YY   YY ");
-        mvwprintw(window, y+18+1, x, "    O   O       YY YY    ");
-        mvwprintw(window, y+18+2, x, "   O     O       YYY     ");
-        mvwprintw(window, y+18+3, x, "   O     O        Y      ");
-        mvwprintw(window, y+18+4, x, "    O   O         Y      ");
-        mvwprintw(window, y+18+5, x, "     OOO          Y      ");
 
-    }
-            wrefresh(window);
+// vertically draws monopoly 6 rows x 62 cols on chosen window by cordinates y, x
+void drawTextMonopoly(WINDOW * window, int y, int x){
+    
+    mvwprintw(window, y, x,    "  MMM   MMM   OOO   N   N   OOO   PPPP    OOO   L     YY   YY");
+    mvwprintw(window, y+1, x,  "  MMMM MMMM  O   O  NN  N  O   O  P   P  O   O  L      YY YY ");
+    mvwprintw(window, y+2, x,  "  MM MMM MM O     O N N N O     O PPPP  O     O L       YYY  ");
+    mvwprintw(window, y+3, x,  "  MM  M  MM O     O N  NN O     O P     O     O L        Y   ");
+    mvwprintw(window, y+4, x,  "  MM     MM  O   O  N   N  O   O  P      O   O  L        Y   ");
+    mvwprintw(window, y+5, x,  "  MM     MM   OOO   N   N   OOO   P       OOO   LLLLL    Y   ");
+
+    wrefresh(window);
 }
 
 
@@ -748,7 +762,6 @@ void initDrawScreen(){
     // init_pair(5, COLOR_WHITE, COLOR_YELLOW);    // yellow
     // init_pair(6, COLOR_WHITE, COLOR_GREEN);     // green
     // init_pair(7, COLOR_WHITE, COLOR_BLUE);      // blue
-
 
     refresh();
 
@@ -813,30 +826,29 @@ void initDrawGameboard(int startY, int startX) {
 
 
     // create playerStates
-    window_gameboard.playerStates = (WINDOW **) malloc(player_count*sizeof(WINDOW *));
+    window_gameboard.playerStates = (WINDOW **) malloc(players_count*sizeof(WINDOW *));
     if (window_gameboard.playerStates == NULL) { exit(1); }
 
     temp_offset = 0;
-    if (player_count > 3)
+    if (players_count > 3)
     {
         window_gameboard.playerStates[3] = newwin(SPACE_HEIGHT, SPACE_WIDTH, startY+(y_spaceCoordinate-1)*SPACE_HEIGHT, startX+2*SPACE_WIDTH);
     }
-    if (player_count > 2)
+    if (players_count > 2)
     {
         window_gameboard.playerStates[2] = newwin(SPACE_HEIGHT, SPACE_WIDTH, startY+(y_spaceCoordinate-1)*SPACE_HEIGHT, startX+1*SPACE_WIDTH);
         temp_offset = 1;
     }
-    if (player_count > 1)
+    if (players_count > 1)
     {
         window_gameboard.playerStates[1] = newwin(SPACE_HEIGHT, SPACE_WIDTH, startY+(y_spaceCoordinate-1-temp_offset)*SPACE_HEIGHT, startX+2*SPACE_WIDTH);
     }
 
     window_gameboard.playerStates[0] = newwin(SPACE_HEIGHT, SPACE_WIDTH, startY+(y_spaceCoordinate-1-temp_offset)*SPACE_HEIGHT, startX+1*SPACE_WIDTH);
 
-
 }
 
-
+// draws players on a gameboard
 void drawPlayers() {
     int offset;
     WINDOW * currentWindow;
@@ -847,7 +859,7 @@ void drawPlayers() {
         mvwhline(currentWindow, 4, 1, ' ', SPACE_WIDTH-2);      //clear 
         mvwprintw(currentWindow, 4, 2, "");                     //set cursor pos
 
-        for (int playerIndex = 0; playerIndex < player_count; playerIndex++) { // write players on this space
+        for (int playerIndex = 0; playerIndex < players_count; playerIndex++) { // write players on this space
             if (players[playerIndex]->space_number == spaceIndex){
                 wattron(currentWindow, A_BOLD | COLOR_PAIR(playerIndex+1));
                 wprintw(currentWindow, "P%d ", playerIndex);
@@ -860,8 +872,9 @@ void drawPlayers() {
 }
 
 
+// draw gameboard
 void drawBoard(){
-    
+
     // draw direction arrow
     box(window_gameboard.frame, ACS_VLINE, ACS_HLINE);
     mvwhline(window_gameboard.frame, 1, 2, ACS_HLINE, 7);
@@ -869,12 +882,13 @@ void drawBoard(){
     wrefresh(window_gameboard.frame);
 
     // draw name
-    drawTextMonopoly(window_gameboard.frame, SPACE_HEIGHT+4, SPACE_WIDTH*4-62/2, 1);
+    drawTextMonopoly(window_gameboard.frame, SPACE_HEIGHT+4, SPACE_WIDTH*4-62/2);
 
     // draw spaces                                                
     for (int spaceIndex = 0; spaceIndex < space_count; spaceIndex++){
         WINDOW * window = window_gameboard.spaces[spaceIndex];
         SPACE currentSpace = gameboard[spaceIndex];
+        // wclear(window);
         wattrset(window, A_BOLD);
         box(window, ACS_VLINE, ACS_HLINE);
 
@@ -928,9 +942,10 @@ void drawBoard(){
     }
 
     // draw player states boxes
-    for (int playerIndex = 0; playerIndex < player_count; playerIndex++){
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++){
         WINDOW * window = window_gameboard.playerStates[playerIndex];
         PLAYER * currentPlayer = players[playerIndex];
+        wclear(window);
 
         wattrset(window, A_BOLD);
         if (playerIndex == playerTurnIndex){
@@ -957,44 +972,57 @@ void drawBoard(){
     }
 }
 
-// void drawTurnState(){
-
-//     // draw prompt(input) box
-//     wclear(window_gameboard.interraction);
-//     box(window_gameboard.interraction, ACS_VLINE, ' ');
-//     wrefresh(window_gameboard.interraction);
-
-//     wattrset(window_gameboard.interraction, A_BOLD);
-
-
-//     mvwhline(window_gameboard.interraction, 5, 1, ' ', 2*SPACE_WIDTH - 2);
-//     wattrset(window_gameboard.interraction, COLOR_PAIR(Red));
-// }
-
 void drawResults(int bankruptIndex){
     drawBoard();
+    drawPlayers();
 
     int winnerindex = findWinner(bankruptIndex);
 
+    // write winner to interraction window
     wclear(window_gameboard.interraction);
-    wattrset(window_gameboard.interraction, COLOR_PAIR(Yellow+1) | A_BOLD | A_BLINK);
+    wattrset(window_gameboard.interraction, COLOR_PAIR(winnerindex+1) | A_BOLD | A_BLINK);
     box(window_gameboard.interraction, ACS_VLINE, ACS_HLINE);
     wrefresh(window_gameboard.interraction);
 
+    // draw winner prompt
     wattrset(window_gameboard.interraction, A_BOLD);
-    mvwprintw(window_gameboard.interraction, 3, (SPACE_WIDTH-12/2), "WINNER:");
+    mvwprintw(window_gameboard.interraction, 2, (SPACE_WIDTH-12/2), "WINNER:");
     wattron(window_gameboard.interraction, COLOR_PAIR(winnerindex+1));
-    wprintw(window_gameboard.interraction, " P%d", winnerindex);
+    if (winnerindex >= 0){
+        wprintw(window_gameboard.interraction, " P%d", winnerindex);
+    } else {
+        wprintw(window_gameboard.interraction, " P?");
+    }
 
+    // draw exit options
     wattrset(window_gameboard.interraction, A_NORMAL);
+    mvwprintw(window_gameboard.interraction, 4, (SPACE_WIDTH-30/2), "[Press <m> to return to menu]");
+    mvwprintw(window_gameboard.interraction, 5, (SPACE_WIDTH-30/2), "[Press <q> to quit the game ]");
+
     wrefresh(window_gameboard.interraction);
-    sleep(3);
-    mvwprintw(window_gameboard.interraction, 5, (SPACE_WIDTH-20/2), "[Press <q> to quit]");
-    wrefresh(window_gameboard.interraction);
-    while(getchar() != 'q'){};
+
+    while(1){
+        switch (getchar())
+        {
+        case 'q':
+            game_state = eol;
+            return;
+            break;
+
+        case 'm':
+            game_state = menu;
+            return;
+            break;
+        
+        default:
+            break;
+        }
+    };
 };
 
-int drawInputDiceValue(int * dice){
+
+// get dice value for current player (playerTurnIndex)
+void drawInputDiceValue(int * dice){
     wattrset(window_gameboard.interraction, A_NORMAL);
 
     // draw input box
@@ -1005,12 +1033,15 @@ int drawInputDiceValue(int * dice){
     if (players[playerTurnIndex]->isBot == 1){
         *dice = randint(0, 7);
 
+        // write dice prompt
         wattrset(window_gameboard.interraction, A_BOLD);
         mvwprintw(window_gameboard.interraction, 2, (SPACE_WIDTH-26/2), "Player on turn (BOT):");
         wattron(window_gameboard.interraction, COLOR_PAIR(playerTurnIndex+1));
         wprintw(window_gameboard.interraction, " P%d", playerTurnIndex);
         wattroff(window_gameboard.interraction, COLOR_PAIR(playerTurnIndex+1));
         mvwprintw(window_gameboard.interraction, 4, (SPACE_WIDTH-9/2), "DICE: %d", *dice);
+
+        // draw hint
         wattrset(window_gameboard.interraction, A_NORMAL);
         mvwprintw(window_gameboard.interraction, 6, (SPACE_WIDTH-31/2), "[Press any button to continue]");
 
@@ -1019,10 +1050,12 @@ int drawInputDiceValue(int * dice){
 
     } else {
 
+        // write dice prompt
         mvwprintw(window_gameboard.interraction, 2, (SPACE_WIDTH-10/2), "Your Turn");
         wattrset(window_gameboard.interraction, A_BOLD);
         mvwprintw(window_gameboard.interraction, 3, (SPACE_WIDTH-19/2), "Enter dice value: ");
 
+        //  input
         curs_set(2);
         echo();
 
@@ -1036,6 +1069,7 @@ int drawInputDiceValue(int * dice){
             mvwhline(window_gameboard.interraction, 5, 1, ' ', 2*SPACE_WIDTH - 2);
             wattrset(window_gameboard.interraction, COLOR_PAIR(Red));
 
+            // incorrect input handling
             if (isdigit(temp)){
                 *dice = (int)(temp - '0');
                 if (*dice >= 0 && *dice <= 6) {
@@ -1055,39 +1089,221 @@ int drawInputDiceValue(int * dice){
 
         curs_set(0);
         noecho();
-
     }
-
-    return 0;
 };
 
 
 
-// void drawMenu()
+void drawMenu(){
+    char temp;
 
+    //  draw MONOPOLY prompt
+    attron(A_BOLD | COLOR_PAIR(Yellow+1));
+    drawTextMonopoly(stdscr, 4, 8);
+    attroff(A_BOLD| COLOR_PAIR(0));
 
-// --- Game --- //
-void aGame(int argc, char * argv[]){
+    // create and draw manu window
+    WINDOW * menu = newwin(SPACE_HEIGHT*2, SPACE_WIDTH*2, SPACE_HEIGHT*2, SPACE_WIDTH);
+    wattron(menu, A_BOLD);
+    box(menu, ' ', ' ');
+    wattroff(menu, A_BOLD);
 
-    FLAG flag_board = {0, NULL}, flag_properties = {0, NULL};
+    // draw hints
+    wattrset(menu, COLOR_PAIR(Green+1) | A_BOLD);
+    mvwprintw(menu, 2, 4, "Press <p> to p PLAY the game");
+    wattrset(menu, COLOR_PAIR(0));
+    mvwprintw(menu, 3, 4, "Press <c> to set player COUNT");
+    mvwprintw(menu, 4, 4, "Press <y> to set YOUR PLAYER");
+    wattrset(menu, COLOR_PAIR(Yellow+1));
+    mvwprintw(menu, 5, 4, "Press <space> to do nothing");
+    wattrset(menu, COLOR_PAIR(Red+1));
+    mvwprintw(menu, 6, 4, "Press <q> to QUIT the game");
 
-    player_count = 4;
+    // draw players
+    wattrset(menu, A_NORMAL);
+    mvwprintw(menu, 8, 4, "Players (%d):", players_count);
+    for (int playerIndex = 0; playerIndex < players_count; playerIndex++){
+        wattrset(menu, COLOR_PAIR(playerIndex+1));
+        mvwprintw(menu, 9+playerIndex, 6, "Player%d: ", playerIndex);
+        wattrset(menu, A_NORMAL);
+        if (playerIndex == notBotIndex){ wattrset(menu, A_BOLD);  wprintw(menu, "<-- YOU"); } else {wprintw(menu, "BOT"); }
+    }
+    if (notBotIndex == -1){
+        mvwprintw(menu, 9+players_count, 5, "You don't take part");
+    }
 
-    getOptions(argc, argv, &flag_board, &flag_properties); // +FLAGS
-
-    initDrawScreen();
+    // refresh
     refresh();
+    wrefresh(menu);
 
-    int dice, bankruptPlayerIndex;
-    game_state = game_start;
+    // get input
+    temp = getch();
+    switch (temp)
+    {
+    case 'q':
+        game_state = eol;
+        break;
+    
+    case 'g':
+        game_state = game_start;
+        break;
+
+    case 'c':
+
+        //  redraw menu as input field
+        wclear(menu);
+        wattron(menu, A_BOLD);
+        box(menu, ' ', ' ');
+
+        // prompt
+        mvwprintw(menu, 5, (SPACE_WIDTH-19/2), "Choose Player count");
+        wattroff(menu, A_BOLD);
+        mvwprintw(menu, 6, (SPACE_WIDTH-25/2), "(enter number <2-4>)");
+
+        curs_set(2);
+        echo();
+
+        //  input + error handling
+        char temp2;
+        while (1) {
+            
+            wmove(menu, 8, (SPACE_WIDTH-1));
+            temp2 = wgetch(menu);
+
+            mvwhline(menu, 12, 1, ' ', 2*SPACE_WIDTH - 2);
+            wattrset(menu, COLOR_PAIR(Red));
+
+            if (isdigit(temp2)){
+                if (temp2 > '1' && temp2 < '0' + players_count) {
+                    wattrset(menu, A_NORMAL);
+                    mvwhline(menu, 10, 1, ' ', 2*SPACE_WIDTH - 2);
+
+                    players_count = temp2 - '0';
+                    break;      // user entered right input (number 1-pC)
+                } else {
+                    mvwprintw(menu, 12, SPACE_WIDTH-13, "*Enter value from 2 to 4");
+                }
+            } else {
+                mvwprintw(menu, 12, SPACE_WIDTH-11, "*Enter a VALID value");
+            }
+
+            wattrset(menu, A_BOLD);
+            mvwhline(menu, 10, 1, ' ', 2*SPACE_WIDTH - 2);
+        }
+
+        curs_set(0);
+        noecho();
+        break;
+    
+    case 'y':
+
+        //  redraw menu as input field
+        wclear(menu);
+        wattron(menu, A_BOLD);
+        box(menu, ' ', ' ');
+
+        // prompt
+        mvwprintw(menu, 5, (SPACE_WIDTH-19/2), "Choose your player");
+        wattroff(menu, A_BOLD);
+        mvwprintw(menu, 6, (SPACE_WIDTH-25/2), "(enter number <0-%d>, or", players_count-1);
+        mvwprintw(menu, 7, (SPACE_WIDTH-30/2), "<n> to not take part in game)");
+
+        // input + error handling
+        curs_set(2);
+        echo();
+
+        char temp1;
+        while (1) {
+            wmove(menu, 10, (SPACE_WIDTH-1));
+            temp2 = wgetch(menu);
+
+            mvwhline(menu, 12, 1, ' ', 2*SPACE_WIDTH - 2);
+            wattrset(menu, COLOR_PAIR(Red));
+
+            if (isdigit(temp2)){
+                if (temp2 >= '0' && temp2 < '0' + players_count) {
+                    wattrset(menu, A_NORMAL);
+                    mvwhline(menu, 10, 1, ' ', 2*SPACE_WIDTH - 2);
+
+                    notBotIndex = temp2 - '0';
+                    break;      // user entered right input (number 1-pC)
+                } else {
+                    mvwprintw(menu, 12, SPACE_WIDTH-13, "*Enter value from 0 to %d", players_count-1);
+                }
+            } else {
+                if (temp2 == 'n'){
+                    wattrset(menu, A_NORMAL);
+                    mvwhline(menu, 10, 1, ' ', 2*SPACE_WIDTH - 2);
+
+                    notBotIndex = -1;
+                    break;      // user entered right input (number 1-pC)}
+                }
+                mvwprintw(menu, 12, SPACE_WIDTH-11, "*Enter a VALID value");
+            }
+
+            wattrset(menu, A_BOLD);
+            mvwhline(menu, 10, 1, ' ', 2*SPACE_WIDTH - 2);
+        }
+
+        curs_set(0);
+        noecho();
+        break;
+
+    case ' ':
+        wclear(menu);
+        wattron(menu, A_BOLD);
+        box(menu, ' ', ' ');
+
+        mvwprintw(menu, 4, SPACE_WIDTH - 8/2, "Well...");
+        mvwprintw(menu, 6, SPACE_WIDTH - 23/2, "Do nothing %ds (Wait).", waitTimeJK);
+        mvwprintw(menu, 7, SPACE_WIDTH - 32/2, "Next time you'd be waitimg %ds.", waitTimeJK+1);
+        mvwprintw(menu, 9, SPACE_WIDTH - 3/2, "...", waitTimeJK+3);
+        wattroff(menu, A_BOLD);
+        mvwprintw(menu, 13, SPACE_WIDTH - 35/2, "Yea, there IS mistake in 'waiting'", waitTimeJK+1);
+
+        wrefresh(menu);
+
+        sleep(waitTimeJK);
+        waitTimeJK+=3;
+        break;
+
+    default:
+        break;
+    }
+
+    wclear(menu);
+    delwin(menu);
+}
+
+
+// --- Game Function --- //
+void aGame(int argc, char * argv[]){
+    FLAG flag_board = {0, NULL}, flag_properties = {0, NULL};   // TODO
+    // getOptions(argc, argv, &flag_board, &flag_properties); // +FLAGS
+
+    srandom(time(NULL));    // initialize random
+
+    // init game settings
+    waitTimeJK = 3;
+    players_count = 4;
+    notBotIndex = -1;
+
+    // init UI
+    initDrawScreen();
 
     // game loop
-    while (1) {
+    game_state = menu;
+    int dice, bankruptPlayerIndex;
 
-        clear();
+    while (1) {
+        // clear();
 
         switch (game_state)
         {
+        case menu:
+            drawMenu();
+
+            break;
         case game_start:
             if (initGameboard(flag_board, flag_properties) != 0) {
                 game_state = eol;
@@ -1097,7 +1313,6 @@ void aGame(int argc, char * argv[]){
             playerTurnIndex = 0;
 
             initDrawGameboard(1, 1);
-            players[1]->isBot = 0;
 
             game_state = game_process;
             break;
@@ -1109,7 +1324,6 @@ void aGame(int argc, char * argv[]){
 
             drawInputDiceValue(&dice); // wait untill input dice/enter
 
-
             if(movePlayer(dice) == 0){
                 bankruptPlayerIndex = playerTurnIndex;
                 game_state = game_end;
@@ -1117,7 +1331,7 @@ void aGame(int argc, char * argv[]){
             }
 
             playerTurnIndex++;
-            if (playerTurnIndex >= player_count) {
+            if (playerTurnIndex >= players_count) {
                 playerTurnIndex = 0;
             }
 
@@ -1125,10 +1339,13 @@ void aGame(int argc, char * argv[]){
 
         case game_end:
             
-            drawResults(bankruptPlayerIndex);
-            freeGame();
+            drawResults(bankruptPlayerIndex); //handles game_state change
 
-            game_state = eol;
+            // free allocated game memory
+            freeDrawData();
+            freeGameboard(flag_board, flag_properties);
+            freePlayers();
+
             break;
 
         case eol:
@@ -1139,8 +1356,7 @@ void aGame(int argc, char * argv[]){
         default:
             break;
         }
-        refresh();
-
+        // refresh();
     }
 
 }
@@ -1151,3 +1367,7 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+//  TODO: 
+//      rules/help page
+//      other TODOs
