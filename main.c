@@ -1,3 +1,5 @@
+// IMPORTANT NOTE: compile with -lncurses option
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
