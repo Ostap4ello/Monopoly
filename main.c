@@ -1146,7 +1146,7 @@ void drawMenu(){
         game_state = eol;
         break;
     
-    case 'g':
+    case 'p':
         game_state = game_start;
         break;
 
@@ -1298,7 +1298,7 @@ void aGame(int argc, char * argv[]){
     int dice, bankruptPlayerIndex;
 
     while (1) {
-        // clear();
+        clear();
 
         switch (game_state)
         {
@@ -1358,7 +1358,6 @@ void aGame(int argc, char * argv[]){
         default:
             break;
         }
-        // refresh();
     }
 
 }
