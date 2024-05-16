@@ -1,5 +1,5 @@
 # MONOPOLY
-
+**by Ostap Pelekh, STU FEI, Applied Informatics, 1.bc**
 This is monopoly game with Text-based UI (ncurses.h)
 
 
