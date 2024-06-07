@@ -1,7 +1,7 @@
 all: run
 
 setup:
-	cmake -S ./CMakeLists.txt -B ./build/
+	cmake -S . -B ./build
 	cmake --build ./build/.
 
 run:
