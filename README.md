@@ -5,7 +5,7 @@ This is monopoly game with Text-based UI (ncurses.h)
 
 
 
-## --- RULES ---
+## RULES
 
 ### OBJECTIVE OF THE GAME
 Become the wealthiest player through buying and renting property and force other players into bankruptcy.
@@ -34,7 +34,7 @@ If the player has all properties of the same color he has a monopoly and receive
 When the player has 0 cash they are bankrupt and out.
 
 
-## --- GAMEPLAY ---
+## GAMEPLAY 
 
 You can choose number of players and Your player.
 Dice values for each player (except for Your player) are generated randomly. You will have to write a dice value for your player manually.
@@ -42,7 +42,7 @@ Dice values for each player (except for Your player) are generated randomly. You
 Follow game prompts and instructions.
 
 
-## --- NOTES ---
+## NOTES 
 
 **COMPILE with -lncurses argument**
 Example:
