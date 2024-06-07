@@ -42,11 +42,18 @@ Dice values for each player (except for Your player) are generated randomly. You
 Follow game prompts and instructions.
 
 
-## NOTES 
+## SETUP
 
-**COMPILE with -lncurses argument**
-Example:
+1. clone repository
+2. cd into repository folder
+3. run (sets up CMAKE Project)
 
-    gcc -lncurses main.c
+    make setup
+
+4. run (runs game)
+
+    make
+
+### NOTE
 
 <ctrl+c> to exit game immediately

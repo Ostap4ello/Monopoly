@@ -1,18 +1,8 @@
-all: build run
+all: run
 
-build: 
-	gcc main.c -lncurses -o main.so
+setup:
+	cmake -S ./CMakeLists.txt -B ./build/
+	cmake --build ./build/.
+
 run:
-	./main.so # -b gameboard/gameboard6.txt -t properties/properties3.txt
-clean:
-	rm main.so
-
-nc: buildnc runnc
-
-buildnc:
-	gcc nctest.c -lncurses -o nctest.so
-runnc:
-	./nctest.so
-cleannc: 
-	rm nctest.so
-
+	./build/main.so
